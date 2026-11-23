@@ -1,0 +1,104 @@
+stage: G3b full simulation ladder, inference validation, ablations, and scaling
+freeze: docs/g3a_pivot_addendum.md
+parent_gate: docs/g3a_v2_screen_memo.md
+local_resources:
+  maximum_workers: 6
+  threads_per_worker: 1
+  nice_level: 10
+
+wp4_2a_null_calibration:
+  dgps: [N, N10]
+  n: 500
+  n_test: 500
+  m0: 200
+  m1: 60
+  common_count: 60
+  replications: 50
+  seed_start: 1000
+  nominal_alpha: 0.05
+  pass_rate_ceiling: 0.08
+  hard_fail_requires_lower_binom_ci_above: 0.05
+  compare_raw_unequal_m: true
+
+wp4_2c_observational_coverage:
+  dgp: DGP-C
+  dimension: 10
+  n: 500
+  n_test: 500
+  common_count: 200
+  propensity_bounds: [0.1, 0.9]
+  replications: 30
+  seed_start: 2000
+  propensity_learners: [LogisticRegressionCV, LogisticRegression_C1]
+  unadjusted_comparator: true
+  misspecified_propensity_sensitivity: true
+  coverage_target_range: [0.91, 0.98]
+  oracle_draws: 4000
+
+wp4_2c_multimodal_curvature:
+  dgp: DGP-M
+  dimension: 10
+  n: 500
+  n_test: 500
+  common_count: 200
+  replications: 20
+  seed_start: 3000
+  methods: [MDCF, LOTGRF, RandomSW, MeanCovDR, CoordinateWCF, KME_CausalDRF, DirectScalarDR]
+  verify_three_way_identity_tol: 1.0e-10
+  verify_naive_lot_curvature_inflation: true
+
+wp4_2c_ablations:
+  dgps: [S, R]
+  dimension: 10
+  n: 500
+  n_test: 500
+  common_count: 200
+  replications: 10
+  seed_start: 1000
+  variants:
+    - MDCF
+    - MDCF_StaticBank
+    - RandomSW
+    - MDCF_Ridge1
+
+wp4_2c_scaling_profile:
+  n_sweep:
+    fixed: {dimension: 10, common_count: 200}
+    values: [250, 500, 1000, 2000]
+  m_sweep:
+    fixed: {dimension: 10, n: 500}
+    values: [50, 100, 200, 400]
+  d_sweep:
+    fixed: {n: 500, common_count: 200}
+    values: [2, 5, 10, 20]
+  seed: 9001
+
+wp4_2d_crossover_grid_colab:
+  dgp: R_grid
+  replications: 30
+  seed_start: 4000
+  n_test: 500
+  common_count: 200
+  methods: [MDCF, LOTGRF, RandomSW, MeanCovDR, KME_CausalDRF, DirectScalarDR]
+  dimensions: [2, 5, 10, 20]
+  sample_sizes: [250, 500, 1000]
+  signal_strengths: [0.5, 0.85]
+  core_grid_cells:
+    # Full d x n crossover at primary signal rho=0.85 (12 cells)
+    - {d: 2, n: 250, rho: 0.85}
+    - {d: 2, n: 500, rho: 0.85}
+    - {d: 2, n: 1000, rho: 0.85}
+    - {d: 5, n: 250, rho: 0.85}
+    - {d: 5, n: 500, rho: 0.85}
+    - {d: 5, n: 1000, rho: 0.85}
+    - {d: 10, n: 250, rho: 0.85}
+    - {d: 10, n: 500, rho: 0.85}
+    - {d: 10, n: 1000, rho: 0.85}
+    - {d: 20, n: 250, rho: 0.85}
+    - {d: 20, n: 500, rho: 0.85}
+    - {d: 20, n: 1000, rho: 0.85}
+    # Moderate signal strength sweep at n=500 across all d (4 cells)
+    - {d: 2, n: 500, rho: 0.50}
+    - {d: 5, n: 500, rho: 0.50}
+    - {d: 10, n: 500, rho: 0.50}
+    - {d: 20, n: 500, rho: 0.50}
