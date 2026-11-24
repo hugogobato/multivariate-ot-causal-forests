@@ -24,6 +24,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT / "src") not in sys.path:
     sys.path.insert(0, str(ROOT / "src"))
 
+from mdcf.baselines import predecessor_root
 from mdcf.discriminative_forest import ForestConfig
 from mdcf.g3b_dgps import active_subspace_r_grid, r_grid_oracle, simulate_r_grid
 from mdcf.ot_embed import gaussian_reference, prepare_clouds
@@ -32,6 +33,17 @@ from mdcf.pilot import score_predictions, shared_split_features, training_model
 
 RESULTS_DIR = ROOT / "results/g3b"
 CROSSOVER_METHODS = ("MDCF", "LOTGRF", "RandomSW", "MeanCovDR", "KME_CausalDRF", "DirectScalarDR")
+
+
+def prewarm_causal_drf_rcpp() -> None:
+    """Compile and cache Causal-DRF Rcpp shared object once before spawning parallel workers."""
+    import subprocess
+    cdrf_script = predecessor_root() / "research/baselines/causal_drf_r/causal_drf.R"
+    subprocess.run(
+        ["Rscript", "--vanilla", "-e", f'source("{cdrf_script}")'],
+        check=True, capture_output=True, text=True,
+    )
+    print("Pre-warmed Causal-DRF Rcpp cache.", flush=True)
 
 
 def stable_digest(value) -> str:
@@ -149,17 +161,22 @@ def main() -> int:
     parser.add_argument("--rho", type=float, default=0.85)
     parser.add_argument("--start-seed", type=int, default=4000)
     parser.add_argument("--replications", type=int, default=30)
+    parser.add_argument("--seeds", type=str, default=None, help="Optional comma-separated explicit seeds (overrides --start-seed/--replications)")
     parser.add_argument("--workers", type=int, default=2)
     args = parser.parse_args()
 
     oracle = load_or_compute_oracle(args.d, args.rho)
-    seeds = tuple(range(args.start_seed, args.start_seed + args.replications))
+    if args.seeds:
+        seeds = tuple(int(tok.strip()) for tok in args.seeds.split(",") if tok.strip())
+    else:
+        seeds = tuple(range(args.start_seed, args.start_seed + args.replications))
     tag = cell_tag(args.d, args.n, args.rho)
     sdir = RESULTS_DIR / "crossover_shards" / tag
     sdir.mkdir(parents=True, exist_ok=True)
     pending = [s for s in seeds if not (sdir / f"{tag}_seed{s}.json").exists()]
     print(f"Crossover {tag}: {len(seeds) - len(pending)} recovered, {len(pending)} pending", flush=True)
     if pending:
+        prewarm_causal_drf_rcpp()
         if args.workers == 1:
             for s in pending:
                 c = run_crossover_seed(args.d, args.n, args.rho, s, oracle, shards_dir=sdir)
